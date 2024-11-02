@@ -17,11 +17,14 @@ app.use(morgan('dev'))
 
 app.use(express.json())
 app.use(cookieParser())
-app.use(cors())
-app.use(session({
-    secret: "my_secret_key2",
-    cookie: { secure: true }
+app.use(cors({
+    origin: 'http://localhost:3000',
+    credentials: true
 }))
+// app.use(session({
+//     secret: "my_secret_key2",
+//     cookie: { secure: true }
+// }))
 
 
 app.use(rateLimit({
@@ -82,22 +85,42 @@ app.post('/api/login-with-csrf', (req, res) => {
 })
 
 app.get('/api/hello', (req, res) => {
-    setTimeout(() => {
-        res.json({ message: 'Hello from the server!' })
-    }, 5000);
+    //setTimeout(() => {
+    res.json({ message: 'Hello from the server!' })
+    // }, 5000);
 })
 
 app.get("/check", authMiddleware, (req, res) => {
-    let token = req.headers.authorization.split(" ")[1]
-    let email = jwt.verify(token, 'my_secret_key').email
-    let roles = users.find(x => x.email === email).roles
-    let pageRoles = users.find(x => x.email === email).pageRoles
-    res.json({ email, roles, pageRoles })
+
+    try {
+        let token = req.cookies.token
+        let email = jwt.verify(token, 'my_secret_key').email
+        let roles = users.find(x => x.email === email).roles
+        let pageRoles = users.find(x => x.email === email).pageRoles
+        return res.json({ email, roles, pageRoles })
+    } catch (error) {
+        return res.sendStatus(401)
+    }
+
+})
+
+
+app.post("/auth/logout", (req, res) => {
+
+    let refreshToken = req.cookies.refreshToken
+    refreshTokens = refreshTokens.filter(x => x.token !== refreshToken)
+
+    res.clearCookie('token')
+    res.clearCookie('refreshToken')
+    res.json({ message: 'Logout successful' })
 })
 
 app.get("/api/employees", authMiddleware, checkPermission(1), (req, res) => {
     res.json(employees)
 })
+
+
+
 
 
 app.get("/api/employees-2", (req, res) => {
@@ -124,16 +147,16 @@ app.post("/api/login", (req, res) => {
         refreshTokens.push(refreshToken)
 
         res.cookie('token', token, {
-            httpOnly: false, // javascript ile erişimi engeller
-            secure: false, // sadece https üzerinden çalışır
-            // sameSite: 'strict' // sadece aynı domain üzerinden çalışır
+            httpOnly: true
         })
+        res.cookie('refreshToken', refreshToken.token, {
+            httpOnly: true
+        })
+
         let roles = users.find(x => x.email === email).roles
         let pageRoles = users.find(x => x.email === email).pageRoles
 
         res.json({
-            token: token,
-            refreshToken: refreshToken.token,
             user: {
                 email: email,
                 roles: roles,
@@ -144,9 +167,9 @@ app.post("/api/login", (req, res) => {
 })
 
 app.post("/api/refreshToken", (req, res) => {
-    console.log("refreshTokens", refreshTokens)
 
-    const { refreshToken, email } = req.body
+    const { email } = req.body
+    let refreshToken = req.cookies.refreshToken
 
     const token = refreshTokens.find(x => x.token === refreshToken)
 
@@ -166,8 +189,12 @@ app.post("/api/refreshToken", (req, res) => {
     //refresh token süresi geçmemiş ve token geçerli ise yeni bir accessToken oluşturuyorum.
     const newAccessToken = jwt.sign({ email }, 'my_secret_key', { expiresIn: '10m' })
 
+    res.cookie('token', newAccessToken, {
+        httpOnly: true
+    })
+
     res.json({
-        token: newAccessToken
+        message: "Success"
     })
 })
 

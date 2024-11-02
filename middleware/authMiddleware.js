@@ -1,17 +1,10 @@
 const jwt = require('jsonwebtoken');
 const users = require('../data/users');
 
-const roles = [
-    {
-        url: "/api/employees",
-        number: 1
-    }
-]
 
 const authMiddleware = (req, res, next) => {
     try {
-        const token = req.header('Authorization').replace('Bearer ', '');
-        //const token = req.cookies.token;
+        const token = req.cookies.token;
 
         if (!token) {
             return res.status(401).json({ message: 'No token, authorization denied' });
